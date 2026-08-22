@@ -1,2 +1,2 @@
-# Aircraft_Wastewater_Virome-
-The repository contains details of wastewater virome analysis
+# Aircraft_Wastewater_Virome
+The repository contains details of airacraft wastewater virome analysis.
