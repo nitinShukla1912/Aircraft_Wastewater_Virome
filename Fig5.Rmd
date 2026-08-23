@@ -1,0 +1,332 @@
+#--Figure 5A--
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+library(scales)
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(dplyr)
+library(readxl)
+library(lubridate)
+library(tidyquant)
+library(tidyr)
+library(ggpubr)
+library(rstatix)
+library(rprojroot)
+library(wesanderson)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+virome_met_dt <- merge(virome_dt, meta_dt, by = "sample_ID")
+virome_met_dt$Date <- as.Date(virome_met_dt$Date, format = "%d-%m-%Y")
+
+virome_met_dt$species <- gsub("^s__", "", virome_met_dt$species)
+heatp <- virome_met_dt %>%
+  filter(Name %in% c(
+    "Influenza A virus (A/Bewick swan/Netherlands/1/2014(H12N1))",
+    "Influenza A virus (A/chicken/Rostock/45/1934(H7N1))",
+    "Influenza A virus (H1N1)",
+    "Influenza A virus (H3N2)",
+    "Influenza A virus H3N8",
+    "Influenza A virus H5N1",
+    "Influenza A virus H9N2",
+    "Human respiratory syncytial virus A",
+    "Rhinovirus A",
+    "human metapneumovirus",
+    "Human coronavirus 229E",
+    "Severe acute respiratory syndrome coronavirus 2",
+    "Human respirovirus 3",
+    "Human respirovirus 1",
+    "Human adenovirus 12",
+    "Human adenovirus 18",
+    "Human adenovirus 31",
+    "Human adenovirus 21",
+    "Human mastadenovirus B"
+  )) %>%
+  
+  mutate(
+    Month = floor_date(Date, "month"),
+    Name = case_when(
+      Name == "Influenza A virus (A/Bewick swan/Netherlands/1/2014(H12N1))" ~ "IAV H12N1 (Swan)",
+      Name == "Influenza A virus (A/chicken/Rostock/45/1934(H7N1))"         ~ "IAV H7N1 (Chicken)",
+      Name == "Influenza A virus (H1N1)"                                     ~ "IAV H1N1",
+      Name == "Influenza A virus (H3N2)"                                     ~ "IAV H3N2",
+      Name == "Influenza A virus H3N8"                                       ~ "IAV H3N8",
+      Name == "Influenza A virus H5N1"                                       ~ "IAV H5N1",
+      Name == "Influenza A virus H9N2"                                       ~ "IAV H9N2",
+      Name == "Human respiratory syncytial virus A"                          ~ "RSV-A",
+      Name == "Rhinovirus A"                                                 ~ "Rhinovirus A",
+      Name == "human metapneumovirus"                                        ~ "hMPV",
+      Name == "Human coronavirus 229E"                                       ~ "HCoV-229E",
+      Name == "Severe acute respiratory syndrome coronavirus 2"              ~ "SARS-CoV-2",
+      Name == "Human respirovirus 3"                                         ~ "PIV-3",
+      Name == "Human respirovirus 1"                                         ~ "PIV-1",
+      Name == "Human adenovirus 12"                                          ~ "HAdV-12",
+      Name == "Human adenovirus 18"                                          ~ "HAdV-18",
+      Name == "Human adenovirus 31"                                          ~ "HAdV-31",
+      Name == "Human adenovirus 21"                                          ~ "HAdV-21",
+      Name == "Human mastadenovirus B"                                       ~ "HAdV-B",
+      TRUE ~ Name
+    ),
+    
+    virus_group = case_when(
+      grepl("IAV", Name)          ~ "1_Influenza A",
+      grepl("HCoV|SARS", Name)    ~ "2_Coronavirus",
+      grepl("RSV|hMPV|PIV", Name) ~ "3_Paramyxo/Pneumo",
+      grepl("Rhinovirus", Name)   ~ "4_Picornavirus",
+      grepl("HAdV", Name)         ~ "5_Adenovirus",
+      TRUE                        ~ "6_Other"
+    )
+  ) %>%
+  
+  group_by(Month, Airport, Name, virus_group) %>%
+  summarise(RPKMF = sum(RPKMF), .groups = "drop") %>%
+  
+  complete(Month, Airport, Name, fill = list(RPKMF = 0)) %>%
+  
+  group_by(Month, Airport) %>%
+  filter(any(RPKMF > 0)) %>%
+  ungroup() %>%
+  
+mutate(
+  log_val = log10(RPKMF + 1),
+  
+  Name = factor(Name, levels = c(
+    "IAV H1N1", "IAV H3N2", "IAV H3N8", "IAV H5N1",
+    "IAV H9N2", "IAV H7N1 (Chicken)", "IAV H12N1 (Swan)",
+    "SARS-CoV-2", "HCoV-229E",
+    "RSV-A", "hMPV", "PIV-1", "PIV-3",
+    "Rhinovirus A",
+    "HAdV-12", "HAdV-18", "HAdV-21", "HAdV-31", "HAdV-B"
+  ))
+) %>%
+  
+ggplot(aes(x = Month, y = Name, fill = log_val)) +
+  
+  geom_tile(color = "white", linewidth = 0.3) +
+  
+  geom_tile(data = . %>% filter(log_val == 0),
+            fill = "#FFFFFF", color = "white", linewidth = 0.3) +
+  
+  scale_fill_gradientn(
+    colours  = c("#f7f7f7", "#3e387a", "#8b3a8f", "#fe715e"),
+    values   = scales::rescale(c(0, 0.3, 0.65, 1)),
+    na.value = "#FFFFFF",
+    name     = "log10(RPKMF + 1)",
+    limits   = c(0, NA),
+    guide = guide_colorbar(
+      barwidth       = 10,
+      barheight      = 0.6,
+      ticks          = TRUE,
+      title.position = "top",
+      title.hjust    = 0.5,
+      direction      = "horizontal"
+    )
+  ) +
+  
+  geom_hline(yintercept = c(7.5, 9.5, 13.5, 14.5),
+             color = "grey40", linewidth = 0.4, linetype = "dashed") +
+  
+  facet_wrap(vars(Airport), nrow = 1, scales = "free_x") +
+  
+  scale_x_date(
+    date_breaks = "1 month",
+    date_labels = "%b-%y",
+    expand      = c(0, 0)
+  ) +
+  
+  labs(x = NULL, y = NULL) +
+  
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x      = element_text(angle = 45, hjust = 1, colour = "black", size = 10),
+    axis.text.y      = element_text(colour = "black", size = 11, face = "italic"),
+    strip.text       = element_text(colour = "black", size = 13, face = "bold"),
+    strip.background = element_rect(fill = "#e8e8e8", colour = "black", linewidth = 0.5),
+    panel.grid       = element_blank(),
+    panel.border     = element_rect(colour = "black", linewidth = 0.5),
+    panel.background = element_rect(fill = "white"),
+    legend.position  = "bottom",
+    legend.title     = element_text(size = 10, face = "bold"),
+    legend.text      = element_text(size = 9),
+    plot.margin      = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+    panel.spacing    = unit(0.4, "cm")
+  )
+
+heatp
+
+#--Figure 5B--
+
+
+pA <- iav_airport %>%
+  group_by(Date) %>%
+  summarise(total_reads = sum(read_count), .groups = "drop") %>%
+  mutate(real_data = TRUE) %>%   # 👈 mark real data
+  
+  complete(Date = seq(as.Date("2024-07-01"), 
+                      as.Date("2025-08-01"), 
+                      by = "month"),
+           fill = list(total_reads = 0, real_data = FALSE)) %>%
+  
+  ggplot(aes(x = Date)) +
+  
+  geom_col(aes(y = total_reads + 1), fill = "grey85", width = 25) +
+  
+  geom_point(
+    data = ~subset(.x, real_data == TRUE),
+    aes(y = total_reads + 1),
+    color = "#08519c",
+    size = 2.5
+  ) +
+  
+  geom_smooth(
+    data = ~subset(.x, real_data == TRUE),
+    aes(y = total_reads + 1),
+    method = "loess",
+    se = FALSE,
+    color = "#cb181d",
+    linewidth = 1.2,
+    span = 0.6
+  ) +
+  
+  scale_y_log10() +
+  
+  scale_x_date(
+    limits = c(as.Date("2024-07-01"), as.Date("2025-08-31")),
+    date_breaks = "1 month",
+    date_labels = "%b-%y"
+  ) +
+  
+  labs(
+    x = "Sampling Month",
+    y = "Total Influenza Reads (log10 scale)"
+  ) +
+  
+  pub_theme
+
+pA
+
+#--Figure 5C--
+
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(scales)
+
+df <- iav_airport %>%
+  mutate(read_assignment = ifelse(is.na(read_assignment), "ambiguous", read_assignment)) %>%
+  group_by(Date, Airport, read_assignment) %>%
+  summarise(read_count = sum(read_count), .groups = "drop")
+
+df$read_assignment <- factor(
+  df$read_assignment,
+  levels = c("H1N1","H3N2","H5N1","H7N1","H9N2","ambiguous")
+)
+
+serotype_colors <- c(
+  "H1N1" = "#2a9d8f",
+  "H3N2" = "#e76f51",
+  "H5N1" = "#6a4c93",
+  "H7N1" = "#e9c46a",
+  "H9N2" = "#8ac926",
+  "ambiguous" = "grey75"
+)
+
+pub_theme <- theme_bw(base_size = 12) +
+  theme(
+    panel.grid.major = element_line(color = "grey92"),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+    axis.text.y = element_text(colour = "black"),
+    axis.title = element_text(face = "bold"),
+    strip.text = element_text(face = "bold", size = 13),
+    strip.background = element_rect(fill = "grey95", color = "grey70"),
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.title = element_text(face = "bold"),
+    legend.key.size = unit(0.6, "cm"),
+    panel.spacing = unit(1, "lines")
+  )
+
+pB_raw <- df %>%
+  ggplot(aes(x = Date, y = read_count + 1, fill = read_assignment)) +
+  
+  geom_col(
+    position = position_dodge(width = 25),
+    width = 15,
+    alpha = 0.85,
+    color = "black",
+    linewidth = 0.2
+  ) +
+  
+  facet_wrap(~Airport, nrow = 1) +
+  
+  scale_y_log10() +
+  
+  scale_x_date(
+    date_breaks = "1 month",
+    date_labels = "%b-%y"
+  ) +
+  
+  scale_fill_manual(
+    values = serotype_colors,
+    breaks = levels(df$read_assignment),
+    drop = TRUE
+  ) +
+  
+  labs(
+    x = NULL,
+    y = "Read Count (log10 scale)",
+    fill = "Serotype"
+  ) +
+  
+  pub_theme +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+pB_rel <- df %>%
+  group_by(Date, Airport) %>%
+  mutate(rel_ab = read_count / sum(read_count)) %>%
+  
+  ggplot(aes(x = Date, y = rel_ab, fill = read_assignment)) +
+  
+  geom_col(position = "fill", alpha = 0.9) +
+  
+  facet_wrap(~Airport, nrow = 1) +
+  
+  scale_y_continuous(labels = percent) +
+  
+  scale_x_date(
+    date_breaks = "1 month",
+    date_labels = "%b-%y"
+  ) +
+  
+  scale_fill_manual(
+    values = serotype_colors,
+    breaks = levels(df$read_assignment),
+    drop = TRUE
+  ) +
+  
+  labs(
+    x = "Sampling Month",
+    y = "Relative Abundance (%)",
+    fill = "Serotype"
+  ) +
+  
+  pub_theme
+
+final_plot <- (pB_raw / pB_rel) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal"
+  )
+
+final_plot

@@ -1,0 +1,141 @@
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(dplyr)
+library(readxl)
+library(lubridate)
+library(tidyquant)
+library(tidyr)
+library(ggpubr)
+library(rstatix)
+library(rprojroot)
+library(wesanderson)
+
+
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+virome_met_dt <- merge(virome_dt, meta_dt, by = "sample_ID")
+virome_met_dt$Date <- as.Date(virome_met_dt$Date, format = "%d-%m-%Y")
+
+virome_met_dt$species <- gsub("^s__", "", virome_met_dt$species)
+
+target_species <- c(
+  "Rotavirus alphagastroenteritidis",
+  "Betacoronavirus pandemicum",
+  "Betapolyomavirus secuhominis",
+  "Human mastadenovirus F",
+  "Mamastrovirus melbournense",
+  "Betapolyomavirus hominis",
+  "Alphainfluenzavirus influenzae",
+  "Human mastadenovirus A",
+  "Lentivirus humimdef1",
+  "Norovirus norwalkense",
+  "Hepatovirus ahepa",
+  "Human mastadenovirus B"
+)
+
+
+select_dt <- virome_met_dt %>%
+  filter(species %in% target_species) %>%
+  mutate(Timepoint = Date) %>%
+  group_by(sample_ID, Airport, Timepoint, species) %>%
+  summarize(RPKMF = sum(RPKMF), .groups = "drop") %>%
+  group_by(species, Airport) %>%
+  mutate(rel_ab = RPKMF / sum(RPKMF)) %>%
+  ungroup()
+
+
+sample_grid <- virome_met_dt %>%
+  distinct(sample_ID, Airport, Date) %>%
+  rename(Timepoint = Date) %>%
+  tidyr::crossing(species = target_species)
+
+detected_dt <- virome_met_dt %>%
+  filter(species %in% target_species) %>%
+  mutate(Timepoint = Date) %>%
+  group_by(sample_ID, Airport, Timepoint, species) %>%
+  summarise(
+    RPKMF = sum(RPKMF),
+    .groups = "drop"
+  )
+
+plot_dt <- sample_grid %>%
+  left_join(
+    detected_dt,
+    by = c("sample_ID", "Airport", "Timepoint", "species")
+  ) %>%
+  mutate(RPKMF = replace_na(RPKMF, 0))
+
+
+plot_dt <- plot_dt %>%
+  group_by(Timepoint, Airport, species) %>%
+  summarise(
+    RPKMF = sum(RPKMF),
+    .groups = "drop"
+  )
+
+movp <- plot_dt %>%
+  mutate(
+    species = gsub("Betapolyomavirus secuhominis", "JC polyomavirus", species),
+    species = gsub("Mamastrovirus melbournense", "Astrovirus MLB1", species),
+    species = gsub("Betapolyomavirus hominis", "BK polyomavirus", species),
+    species = gsub("Alphainfluenzavirus influenzae", "Influenza A virus", species),
+    species = gsub("Lentivirus humimdef1", "HIV-1", species),
+    species = gsub("Norovirus norwalkense", "Noroviruses", species),
+    species = gsub("Hepatovirus ahepa", "Hepatitis A virus", species),
+    species = gsub("Betacoronavirus pandemicum", "SARS-CoV-2", species)
+  ) %>%
+  ggplot(
+    aes(
+      x = Timepoint,
+      y = RPKMF,
+      colour = Airport,
+      group = Airport
+    )
+  ) +
+  
+  geom_line(
+    linewidth = 0.8,
+    alpha = 0.8
+  ) +
+  
+  geom_point(
+    size = 2,
+    alpha = 0.8
+  ) +
+  
+  scale_x_date(
+    date_breaks = "2 months",
+    date_labels = "%b-%y"
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      "International" = "#185FA5",
+      "Domestic" = "#6a994e"
+    )
+  ) +
+  
+  facet_wrap(~species, scales = "free_y") +
+  
+  labs(
+    x = "Sampling date",
+    y = "RPKMF",
+    colour = "Flight type"
+  ) +
+  
+  theme_bw() +
+  
+  theme(
+    strip.background = element_rect(fill = "grey96", colour = "grey70"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text = element_text(colour = "black"),
+    strip.text = element_text(face = "bold", size = 12),
+    panel.grid.major = element_line(colour = "grey94"),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom"
+  )
+
+movp

@@ -1,0 +1,87 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(scales)
+
+heatmap_virus_top_mean <- read.table(
+  "D:/Airport/Plot_MEAN_RPKMF_heatmap.txt",
+  header      = TRUE,
+  sep         = "\t",
+  check.names = FALSE
+)
+
+
+
+colnames(heatmap_virus_top_mean) <- c("Name", "Domestic", "International")
+
+heat_long <- heatmap_virus_top_mean %>%
+  pivot_longer(cols      = c(Domestic, International),
+               names_to  = "Airport",
+               values_to = "RPKMF") %>%
+  mutate(
+    log_val = ifelse(is.na(RPKMF), NA, log10(RPKMF + 1)),
+    Airport = factor(Airport, levels = c("Domestic", "International"))
+  )
+
+name_order <- heatmap_virus_top_mean %>%
+  mutate(mean_val = rowMeans(cbind(Domestic, International), na.rm = TRUE)) %>%
+  arrange(mean_val) %>%
+  pull(Name)
+
+heat_long <- heat_long %>%
+  mutate(Name = factor(Name, levels = name_order))
+
+heatp2 <- ggplot(heat_long, aes(x = Airport, y = Name, fill = log_val)) +
+ 
+  geom_tile(color = "grey90", linewidth = 0.3,
+            width = 0.8, height = 0.8) +
+ 
+  geom_tile(data = heat_long %>% filter(is.na(log_val)),
+            fill = "#F0F0F0", color = "grey90", linewidth = 0.3,
+            width = 0.8, height = 0.8) +
+ 
+  scale_fill_gradientn(
+    colours = c("#FFFFFF", "#C8EDE8", "#41B8A0", "#6B4FA0", "#2D1B5E"),
+    values   = scales::rescale(c(0, 0.15, 0.4, 0.7, 1)),
+    na.value = "#F0F0F0",
+    name     = "log10(RPKMF + 1)",
+    limits   = c(0, NA),
+    guide    = guide_colorbar(
+      barwidth       = 0.6,
+      barheight      = 10,
+      ticks          = TRUE,
+      direction      = "vertical",
+      title.position = "top",
+      title.hjust    = 0.5,
+      frame.colour   = "grey40"
+    )
+  ) +
+ 
+  geom_vline(xintercept = 1.5, color = "grey50",
+             linewidth = 0.4, linetype = "dashed") +
+ 
+  scale_x_discrete(expand = c(0.4, 0.4)) +
+  scale_y_discrete(expand = c(0.01, 0.01)) +
+ 
+  labs(x = NULL, y = NULL) +
+ 
+  theme_bw(base_size = 10) +
+  theme(
+    axis.text.x = element_text(size = 12, colour = "black",
+                               face = "bold", angle = 45,
+                               hjust = 1, vjust = 1,
+                               margin = margin(t = 6)),
+    axis.text.y      = element_text(size = 7.5, colour = "black",
+                                    face = "italic", hjust = 1),
+    axis.ticks       = element_blank(),
+    panel.grid       = element_blank(),
+    panel.border     = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    legend.position  = "left",
+    legend.title     = element_text(size = 10, face = "bold"),
+    legend.text      = element_text(size = 9),
+    plot.margin      = margin(0.5, 0.5, 0.5, 0.5, "cm"),
+    plot.background  = element_rect(fill = "white", color = NA)
+  )
+
+heatp2

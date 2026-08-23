@@ -1,0 +1,151 @@
+#--Figure 2B--
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(dplyr)
+library(lubridate)
+library(wesanderson)
+library(tidyr)
+library(micropan)
+library(rprojroot)
+
+virome_met_dt <- merge(virome_dt, meta_dt, by = "sample_ID")
+virome_met_dt$City_Site <- str_c(virome_met_dt$City, ", ", virome_met_dt$Site)
+
+
+virome_met_dt <- virome_met_dt %>%
+  mutate(coverage = covered_bases/Length) %>%
+  mutate(cov_category = case_when(
+    coverage >= 0.9 ~ "Over 90%",
+    coverage < 0.9 & coverage >= 0.5 ~ "50% - 90%",
+    coverage < 0.5 & coverage >= 0.1 ~ "10% - 50%",
+    TRUE ~ "Less"
+  ))
+
+mean_category <- virome_met_dt %>%
+  group_by(sample_ID, cov_category) %>%
+  summarize(seqs = n_distinct(Name)) %>%
+  filter(cov_category != "Less") %>%
+  group_by(cov_category) %>%
+  summarize(mean_seqs_per_sample = mean(seqs)) 
+
+custom_scale <- c(
+  "10% - 50%" = "#185FA5",
+  "50% - 90%" = "#0F6E56",
+  "Over 90%"  = "#d4a373"
+)
+
+
+violinp <- virome_met_dt %>%
+  group_by(sample_ID, cov_category) %>%
+  summarize(seqs = n_distinct(Name)) %>%
+  filter(cov_category != "Less") %>%
+  ggplot(aes(x = cov_category, y = seqs, fill = cov_category)) +
+  
+  geom_violin(alpha = 0.4, color = "black", draw_quantiles = c(0.25, 0.5, 0.75),
+              trim = FALSE, linewidth = 0.6) +
+  geom_jitter(aes(color = cov_category), width = 0.15, alpha = 0.5, size = 2,
+              shape = 21, fill = "white", stroke = 0.8) +
+  geom_boxplot(width = 0.08, alpha = 0, color = "grey20",
+               outlier.shape = NA, linewidth = 0.5) +
+  
+  scale_fill_manual(values = custom_scale) +
+  scale_color_manual(values = custom_scale) +
+  
+  geom_text(data = mean_category,
+            aes(x = cov_category, y = mean_seqs_per_sample + 10,
+                label = round(mean_seqs_per_sample, 1)),
+            fontface = "bold", size = 4.5, color = "grey20") +
+  
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.1))) +
+  
+  theme_bw(base_size = 13) +
+  labs(
+    x = "Coverage category",
+    y = "Viral genomes / segments per sample"
+  ) +
+  theme(
+    legend.position    = "none",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor   = element_blank(),
+    panel.border       = element_rect(color = "grey70", linewidth = 0.6),
+    axis.text          = element_text(size = 13, colour = "black"),
+    axis.title.x       = element_text(size = 14, colour = "black", margin = margin(t = 8)),
+    axis.title.y       = element_text(size = 14, colour = "black", margin = margin(r = 8)),
+    strip.text         = element_text(size = 13)
+  )
+
+violinp
+
+
+#--Figure 2C--
+
+library(ggplot2)
+library(data.table)
+library(stringr)
+library(dplyr)
+library(lubridate)
+library(wesanderson)
+library(tidyr)
+library(micropan)
+library(rprojroot)
+virome_met_dt <- merge(virome_dt, meta_dt, by = "sample_ID")
+
+virome_met_dt$City_Site <- str_c(virome_met_dt$City, ", ", virome_met_dt$Site)
+
+median_strains <- virome_met_dt %>%
+  group_by(sample_ID, Airport) %>%
+  summarize(strains = n_distinct(Name)) %>%
+  group_by(Airport) %>%
+  summarize(median_strains = median(strains))
+
+custom_scale <- c(
+  "International" = "#185FA5",
+  "Domestic"      = "#0F6E56"
+)
+
+strainsp <- virome_met_dt %>%
+  group_by(sample_ID, Airport) %>%
+  summarize(strains = n_distinct(Name)) %>%
+  ggplot(aes(x = strains, fill = Airport, color = Airport)) +
+  
+  geom_density(alpha = 0.35, linewidth = 0.7) +
+  geom_rug(alpha = 0.6, linewidth = 0.4) +
+  
+  geom_vline(data = median_strains,
+             aes(xintercept = median_strains, color = Airport),
+             linewidth = 0.8, linetype = "dashed") +
+  
+  geom_text(data = median_strains,
+            aes(x = median_strains + 1.5, y = Inf,
+                label = paste0("Median: ", median_strains),
+                color = Airport),
+            angle = 90, vjust = 1.4, hjust = 1.1,
+            size = 4, fontface = "bold", inherit.aes = FALSE) +
+  
+  scale_fill_manual(values = custom_scale) +
+  scale_color_manual(values = custom_scale) +
+  
+  labs(x = "Genomes/Segments detected per sample", y = NULL) +
+  
+  facet_wrap(vars(Airport), ncol = 1) +
+  
+  theme_bw(base_size = 13) +
+  theme(
+    legend.position    = "none",
+    axis.text.y        = element_blank(),
+    axis.ticks.y       = element_blank(),
+    axis.line.y        = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey90", linewidth = 0.4),
+    strip.text         = element_text(size = 13, face = "bold"),
+    axis.text.x        = element_text(size = 12, colour = "black"),
+    axis.title.x       = element_text(size = 13, colour = "black"),
+    plot.margin        = margin(0.8, 0.8, 0.8, 0.8, "cm")
+  )
+
+strainsp
+
+
+
