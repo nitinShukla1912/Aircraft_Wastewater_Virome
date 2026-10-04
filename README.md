@@ -4,14 +4,6 @@ This repository contains the analysis scripts and influenza A sequencing data as
 
 **Aircraft Wastewater Virome Surveillance from Domestic and International Flights Reveals Viral Diversity Among Travellers: A Proof-of-Concept Study from Gujarat, India**
 
-## Repository Contents
-
-- `Fig2.Rmd` — R code used for analysis and visualization of Figure 2.
-- `Fig3.Rmd` — R code used for analysis and visualization of Figure 3.
-- `Fig4.Rmd` — R code used for temporal analysis and visualization of Figure 4.
-- `Fig5.Rmd` — R code used for influenza A virus analysis and visualization of Figure 5.
-- `serotype_fastq.zip` — FASTQ reads used for influenza A subtype analysis.
-
 ## Influenza A Subtype Analysis
 
 Influenza A-positive reads were further analyzed using the `iav_serotype` tool for read-level subtype classification. The corresponding FASTQ reads are provided in this repository to support transparency and reproducibility of the reported influenza subtype-associated findings.
